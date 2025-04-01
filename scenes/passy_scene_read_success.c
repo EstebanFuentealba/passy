@@ -1,11 +1,72 @@
 #include "../passy_i.h"
 #include <dolphin/dolphin.h>
+#include <storage/storage.h>
 
 #define ASN_EMIT_DEBUG 0
 #include <lib/asn1/DG1.h>
 
 #define TAG "PassySceneReadCardSuccess"
 // Thank you proxmark code for your passport parsing
+
+void save_dg1_to_file(void* context, DG1_t* dg1, uint8_t td_variant, const char* name) {
+    UNUSED(context);
+    FuriString* csv_path = furi_string_alloc();
+    furi_string_printf(csv_path, "%s/passport_data.csv", STORAGE_APP_DATA_PATH_PREFIX);
+
+    Storage* storage = furi_record_open(RECORD_STORAGE);
+    File* file = storage_file_alloc(storage);
+
+    if(storage_file_open(file, furi_string_get_cstr(csv_path), FSAM_WRITE, FSOM_OPEN_APPEND)) {
+        if(storage_file_size(file) == 0) {
+            const char headers[] = "Country,Name,DocNumber,DateOfBirth,Sex,ExpiryDate\n";
+            storage_file_write(file, headers, sizeof(headers) - 1);
+        }
+        char csv_line[256];
+        if(td_variant == 3) { // Passport form factor
+            char* row_1 = (char*)dg1->mrz.buf + 0;
+            char* row_2 = (char*)dg1->mrz.buf + 44;
+
+            snprintf(
+                csv_line,
+                sizeof(csv_line),
+                "%.3s,%s,%.9s,%.6s,%.1s,%.6s\n",
+                row_1 + 2,
+                name,
+                row_2,
+                row_2 + 13,
+                row_2 + 20,
+                row_2 + 21);
+        } else if(td_variant == 1) { // ID form factor
+            char* row_1 = (char*)dg1->mrz.buf + 0;
+            char* row_2 = (char*)dg1->mrz.buf + 30;
+
+            snprintf(
+                csv_line,
+                sizeof(csv_line),
+                "%.3s,%s,%.9s,%.6s,%.1s,%.6s\n",
+                row_1 + 2,
+                name,
+                row_1 + 5,
+                row_2,
+                row_2 + 7,
+                row_2 + 8);
+        } else {
+            FURI_LOG_W(TAG, "Unknown document type variant: %d", td_variant);
+            storage_file_close(file);
+            storage_file_free(file);
+            furi_record_close(RECORD_STORAGE);
+            furi_string_free(csv_path);
+            return;
+        }
+
+        storage_file_write(file, csv_line, strlen(csv_line));
+    }
+
+    storage_file_close(file);
+    storage_file_free(file);
+    furi_record_close(RECORD_STORAGE);
+    furi_string_free(csv_path);
+}
 
 void passy_scene_read_success_on_enter(void* context) {
     Passy* passy = context;
@@ -95,6 +156,7 @@ void passy_scene_read_success_on_enter(void* context) {
                 furi_string_cat_printf(str, "Raw data:\n");
                 furi_string_cat_printf(str, "%.44s\n", row_1);
                 furi_string_cat_printf(str, "%.44s\n", row_2);
+                save_dg1_to_file(passy, dg1, td_variant, name);
             } else if(td_variant == 1) { // ID form factor
                 char* row_1 = (char*)dg1->mrz.buf + 0;
                 char* row_2 = (char*)dg1->mrz.buf + 30;
@@ -112,6 +174,7 @@ void passy_scene_read_success_on_enter(void* context) {
                 furi_string_cat_printf(str, "%.30s\n", row_1);
                 furi_string_cat_printf(str, "%.30s\n", row_2);
                 furi_string_cat_printf(str, "%.30s\n", row_3);
+                save_dg1_to_file(passy, dg1, td_variant, name);
             }
 
         } else {
