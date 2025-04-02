@@ -1,6 +1,8 @@
 #include "../passy_i.h"
 #include <dolphin/dolphin.h>
 #include <storage/storage.h>
+#include <lib/toolbox/stream/stream.h>
+#include <lib/toolbox/stream/file_stream.h>
 
 #define ASN_EMIT_DEBUG 0
 #include <lib/asn1/DG1.h>
@@ -66,6 +68,25 @@ void save_dg1_to_file(void* context, DG1_t* dg1, uint8_t td_variant, const char*
     storage_file_free(file);
     furi_record_close(RECORD_STORAGE);
     furi_string_free(csv_path);
+}
+
+void save_com_to_file(void* context, BitBuffer* com_buffer, const char* name) {
+    UNUSED(context);
+    FuriString* path = furi_string_alloc();
+    furi_string_printf(path, "%s/%s.com", STORAGE_APP_DATA_PATH_PREFIX, name);
+
+    Storage* storage = furi_record_open(RECORD_STORAGE);
+    Stream* stream = file_stream_alloc(storage);
+
+    if(file_stream_open(stream, furi_string_get_cstr(path), FSAM_WRITE, FSOM_CREATE_ALWAYS)) {
+        const uint8_t* data = bit_buffer_get_data(com_buffer);
+        size_t size = bit_buffer_get_size_bytes(com_buffer);
+        stream_write(stream, data, size);
+    }
+
+    file_stream_close(stream);
+    furi_record_close(RECORD_STORAGE);
+    furi_string_free(path);
 }
 
 void passy_scene_read_success_on_enter(void* context) {
@@ -187,6 +208,92 @@ void passy_scene_read_success_on_enter(void* context) {
 
     } else if(passy->read_type == PassyReadDG2 || passy->read_type == PassyReadDG7) {
         furi_string_cat_printf(str, "Saved to disk in apps_data/passy/\n");
+    } else if(passy->read_type == PassyReadCOM) {
+        save_com_to_file(context, passy->DG1, passy->file_name);
+        
+        // Mostrar los Data Groups presentes
+        const uint8_t* com_data = bit_buffer_get_data(passy->DG1);
+        size_t com_size = bit_buffer_get_size_bytes(passy->DG1);
+        
+        FURI_LOG_I(TAG, "COM file size: %d bytes", com_size);
+        FURI_LOG_I(TAG, "COM raw data:");
+        for(size_t i = 0; i < com_size; i++) {
+            FURI_LOG_I(TAG, "Byte %d: 0x%02X", i, com_data[i]);
+        }
+        
+        // El archivo COM comienza con el tag '60' (Application level information)
+        if(com_size > 4) {
+            size_t offset = 0;
+            
+            // Buscar el tag '5F01' (LDS Version)
+            while(offset < com_size - 2) {
+                if(com_data[offset] == 0x5F && com_data[offset + 1] == 0x01) {
+                    FURI_LOG_I(TAG, "Found tag 5F01 at offset %d", offset);
+                    // El siguiente byte es la longitud (debe ser 0x04)
+                    if(com_data[offset + 2] == 0x04) {
+                        // Los siguientes 4 bytes contienen la versión LDS
+                        uint8_t major = com_data[offset + 3];
+                        uint8_t minor = com_data[offset + 4];
+                        furi_string_cat_printf(str, "LDS Version: %02d.%02d\n", major, minor);
+                    }
+                    break;
+                }
+                offset++;
+            }
+            
+            // Buscar el tag '5F36' (Unicode Version)
+            offset = 0;
+            while(offset < com_size - 2) {
+                if(com_data[offset] == 0x5F && com_data[offset + 1] == 0x36) {
+                    FURI_LOG_I(TAG, "Found tag 5F36 at offset %d", offset);
+                    // El siguiente byte es la longitud (debe ser 0x06)
+                    if(com_data[offset + 2] == 0x06) {
+                        // Los siguientes 6 bytes contienen la versión Unicode
+                        uint8_t major = com_data[offset + 3];
+                        uint8_t minor = com_data[offset + 4];
+                        uint8_t release = com_data[offset + 5];
+                        furi_string_cat_printf(str, "Unicode Version: %02d.%02d.%02d\n", major, minor, release);
+                    }
+                    break;
+                }
+                offset++;
+            }
+            
+            // Buscar el tag '5C' (Lista de DG presentes)
+            offset = 0;
+            while(offset < com_size - 1) {
+                if(com_data[offset] == 0x5C) {
+                    FURI_LOG_I(TAG, "Found tag 5C at offset %d", offset);
+                    // El siguiente byte es la longitud
+                    uint8_t length = com_data[offset + 1];
+                    FURI_LOG_I(TAG, "Length after 5C: %d", length);
+                    
+                    furi_string_cat_printf(str, "\nData Groups presentes:\n");
+                    // Cada byte en la lista representa un DG
+                    for(size_t i = 0; i < length && (offset + 2 + i) < com_size; i++) {
+                        uint8_t dg_tag = com_data[offset + 2 + i];
+                        FURI_LOG_I(TAG, "DG tag at offset %d: 0x%02X", offset + 2 + i, dg_tag);
+                        
+                        // Convertir el tag al número de DG
+                        switch(dg_tag) {
+                            case 0x61: furi_string_cat_printf(str, "- DG1 (MRZ)\n"); break;
+                            case 0x75: furi_string_cat_printf(str, "- DG2 (Foto)\n"); break;
+                            case 0x63: furi_string_cat_printf(str, "- DG3 (Huellas)\n"); break;
+                            case 0x76: furi_string_cat_printf(str, "- DG4 (Iris)\n"); break;
+                            case 0x65: furi_string_cat_printf(str, "- DG5 (Imagen facial)\n"); break;
+                            case 0x66: furi_string_cat_printf(str, "- DG6 (Dirección)\n"); break;
+                            case 0x67: furi_string_cat_printf(str, "- DG7 (Firma)\n"); break;
+                            case 0x68: furi_string_cat_printf(str, "- DG8 (Certificado)\n"); break;
+                            default: furi_string_cat_printf(str, "- DG desconocido (0x%02X)\n", dg_tag); break;
+                        }
+                    }
+                    break;
+                }
+                offset++;
+            }
+            
+            furi_string_cat_printf(str, "\n");
+        }
     }
     text_box_set_font(passy->text_box, TextBoxFontText);
     text_box_set_text(passy->text_box, furi_string_get_cstr(passy->text_box_store));
