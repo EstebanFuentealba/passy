@@ -210,21 +210,21 @@ void passy_scene_read_success_on_enter(void* context) {
         furi_string_cat_printf(str, "Saved to disk in apps_data/passy/\n");
     } else if(passy->read_type == PassyReadCOM) {
         save_com_to_file(context, passy->DG1, passy->file_name);
-        
+
         // Mostrar los Data Groups presentes
         const uint8_t* com_data = bit_buffer_get_data(passy->DG1);
         size_t com_size = bit_buffer_get_size_bytes(passy->DG1);
-        
+
         FURI_LOG_I(TAG, "COM file size: %d bytes", com_size);
         FURI_LOG_I(TAG, "COM raw data:");
         for(size_t i = 0; i < com_size; i++) {
             FURI_LOG_I(TAG, "Byte %d: 0x%02X", i, com_data[i]);
         }
-        
+
         // El archivo COM comienza con el tag '60' (Application level information)
         if(com_size > 4) {
             size_t offset = 0;
-            
+
             // Buscar el tag '5F01' (LDS Version)
             while(offset < com_size - 2) {
                 if(com_data[offset] == 0x5F && com_data[offset + 1] == 0x01) {
@@ -240,7 +240,7 @@ void passy_scene_read_success_on_enter(void* context) {
                 }
                 offset++;
             }
-            
+
             // Buscar el tag '5F36' (Unicode Version)
             offset = 0;
             while(offset < com_size - 2) {
@@ -252,13 +252,14 @@ void passy_scene_read_success_on_enter(void* context) {
                         uint8_t major = com_data[offset + 3];
                         uint8_t minor = com_data[offset + 4];
                         uint8_t release = com_data[offset + 5];
-                        furi_string_cat_printf(str, "Unicode Version: %02d.%02d.%02d\n", major, minor, release);
+                        furi_string_cat_printf(
+                            str, "Unicode Version: %02d.%02d.%02d\n", major, minor, release);
                     }
                     break;
                 }
                 offset++;
             }
-            
+
             // Buscar el tag '5C' (Lista de DG presentes)
             offset = 0;
             while(offset < com_size - 1) {
@@ -267,41 +268,79 @@ void passy_scene_read_success_on_enter(void* context) {
                     // El siguiente byte es la longitud
                     uint8_t length = com_data[offset + 1];
                     FURI_LOG_I(TAG, "Length after 5C: %d", length);
-                    
+
                     furi_string_cat_printf(str, "\nData Groups presentes:\n");
                     // Cada byte en la lista representa un DG
                     for(size_t i = 0; i < length && (offset + 2 + i) < com_size; i++) {
                         uint8_t dg_tag = com_data[offset + 2 + i];
                         FURI_LOG_I(TAG, "DG tag at offset %d: 0x%02X", offset + 2 + i, dg_tag);
-                        
+
                         // Convertir el tag al número de DG
                         switch(dg_tag) {
-                            case 0x60: furi_string_cat_printf(str, "- Common\n"); break;
-                            case 0x61: furi_string_cat_printf(str, "- DG1 (MRZ)\n"); break;
-                            case 0x75: furi_string_cat_printf(str, "- DG2 (Foto)\n"); break;
-                            case 0x63: furi_string_cat_printf(str, "- DG3 (Huellas)\n"); break;
-                            case 0x76: furi_string_cat_printf(str, "- DG4 (Iris)\n"); break;
-                            case 0x65: furi_string_cat_printf(str, "- DG5 (Imagen facial)\n"); break;
-                            case 0x66: furi_string_cat_printf(str, "- DG6 (Dirección)\n"); break;
-                            case 0x67: furi_string_cat_printf(str, "- DG7 (Firma)\n"); break;
-                            case 0x68: furi_string_cat_printf(str, "- DG8 (Certificado)\n"); break;
-                            case 0x69: furi_string_cat_printf(str, "- DG9\n"); break;
-                            case 0x6A: furi_string_cat_printf(str, "- DG10\n"); break;
-                            case 0x6B: furi_string_cat_printf(str, "- DG11\n"); break;
-                            case 0x6C: furi_string_cat_printf(str, "- DG12\n"); break;
-                            case 0x6D: furi_string_cat_printf(str, "- DG13\n"); break;
-                            case 0x6E: furi_string_cat_printf(str, "- DG14\n"); break;
-                            case 0x6F: furi_string_cat_printf(str, "- DG15\n"); break;
-                            case 0x70: furi_string_cat_printf(str, "- DG16\n"); break;
-                            case 0x77: furi_string_cat_printf(str, "- SecurityData\n"); break;
-                            default: furi_string_cat_printf(str, "- DG desconocido (0x%02X)\n", dg_tag); break;
+                        case 0x60:
+                            furi_string_cat_printf(str, "- Common\n");
+                            break;
+                        case 0x61:
+                            furi_string_cat_printf(str, "- DG1 (MRZ)\n");
+                            break;
+                        case 0x75:
+                            furi_string_cat_printf(str, "- DG2 (Foto)\n");
+                            break;
+                        case 0x63:
+                            furi_string_cat_printf(str, "- DG3 (Huellas)\n");
+                            break;
+                        case 0x76:
+                            furi_string_cat_printf(str, "- DG4 (Iris)\n");
+                            break;
+                        case 0x65:
+                            furi_string_cat_printf(str, "- DG5 (Imagen facial)\n");
+                            break;
+                        case 0x66:
+                            furi_string_cat_printf(str, "- DG6 (Dirección)\n");
+                            break;
+                        case 0x67:
+                            furi_string_cat_printf(str, "- DG7 (Firma)\n");
+                            break;
+                        case 0x68:
+                            furi_string_cat_printf(str, "- DG8 (Certificado)\n");
+                            break;
+                        case 0x69:
+                            furi_string_cat_printf(str, "- DG9\n");
+                            break;
+                        case 0x6A:
+                            furi_string_cat_printf(str, "- DG10\n");
+                            break;
+                        case 0x6B:
+                            furi_string_cat_printf(str, "- DG11\n");
+                            break;
+                        case 0x6C:
+                            furi_string_cat_printf(str, "- DG12\n");
+                            break;
+                        case 0x6D:
+                            furi_string_cat_printf(str, "- DG13\n");
+                            break;
+                        case 0x6E:
+                            furi_string_cat_printf(str, "- DG14\n");
+                            break;
+                        case 0x6F:
+                            furi_string_cat_printf(str, "- DG15\n");
+                            break;
+                        case 0x70:
+                            furi_string_cat_printf(str, "- DG16\n");
+                            break;
+                        case 0x77:
+                            furi_string_cat_printf(str, "- SecurityData\n");
+                            break;
+                        default:
+                            furi_string_cat_printf(str, "- DG desconocido (0x%02X)\n", dg_tag);
+                            break;
                         }
                     }
                     break;
                 }
                 offset++;
             }
-            
+
             furi_string_cat_printf(str, "\n");
         }
     }
