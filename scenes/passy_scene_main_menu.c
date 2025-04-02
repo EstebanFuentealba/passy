@@ -37,13 +37,6 @@ void passy_scene_main_menu_on_enter(void* context) {
             SubmenuIndexDeleteMRZInfo,
             passy_scene_main_menu_submenu_callback,
             passy);
-
-        submenu_add_item(
-            submenu,
-            "Read COM",
-            SubmenuIndexReadCOM,
-            passy_scene_main_menu_submenu_callback,
-            passy);
         submenu_add_item(
             submenu,
             "Read DG1",
@@ -60,6 +53,12 @@ void passy_scene_main_menu_on_enter(void* context) {
             submenu,
             "Read DG7",
             SubmenuIndexReadDG7,
+            passy_scene_main_menu_submenu_callback,
+            passy);
+        submenu_add_item(
+            submenu,
+            "Read COM",
+            SubmenuIndexReadCOM,
             passy_scene_main_menu_submenu_callback,
             passy);
     }
