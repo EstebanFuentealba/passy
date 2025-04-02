@@ -276,6 +276,7 @@ void passy_scene_read_success_on_enter(void* context) {
                         
                         // Convertir el tag al número de DG
                         switch(dg_tag) {
+                            case 0x60: furi_string_cat_printf(str, "- Common\n"); break;
                             case 0x61: furi_string_cat_printf(str, "- DG1 (MRZ)\n"); break;
                             case 0x75: furi_string_cat_printf(str, "- DG2 (Foto)\n"); break;
                             case 0x63: furi_string_cat_printf(str, "- DG3 (Huellas)\n"); break;
@@ -284,6 +285,15 @@ void passy_scene_read_success_on_enter(void* context) {
                             case 0x66: furi_string_cat_printf(str, "- DG6 (Dirección)\n"); break;
                             case 0x67: furi_string_cat_printf(str, "- DG7 (Firma)\n"); break;
                             case 0x68: furi_string_cat_printf(str, "- DG8 (Certificado)\n"); break;
+                            case 0x69: furi_string_cat_printf(str, "- DG9\n"); break;
+                            case 0x6A: furi_string_cat_printf(str, "- DG10\n"); break;
+                            case 0x6B: furi_string_cat_printf(str, "- DG11\n"); break;
+                            case 0x6C: furi_string_cat_printf(str, "- DG12\n"); break;
+                            case 0x6D: furi_string_cat_printf(str, "- DG13\n"); break;
+                            case 0x6E: furi_string_cat_printf(str, "- DG14\n"); break;
+                            case 0x6F: furi_string_cat_printf(str, "- DG15\n"); break;
+                            case 0x70: furi_string_cat_printf(str, "- DG16\n"); break;
+                            case 0x77: furi_string_cat_printf(str, "- SecurityData\n"); break;
                             default: furi_string_cat_printf(str, "- DG desconocido (0x%02X)\n", dg_tag); break;
                         }
                     }
